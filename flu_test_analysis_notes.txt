@@ -357,6 +357,19 @@ Adding sequences from FASTA; added 48 sequences in 0.0243421 seconds.
 
 
 
+
+
+
+
+
+#made a bunch of edits to scripts - now getting sbatch wrappers going and also getting on github
+
+
+
+
+
+
+
 #re-do basecalling with sup 
 #first need to convert fast5s to pod5s:
 #fast5_fail
