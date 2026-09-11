@@ -1,0 +1,81 @@
+---
+title: "Quick Analysis of Inital ONT LMGSeq Influenza Test Runs "
+output: html_notebook
+---
+
+#Influenza Experimental Coinfections ONT LMGSeq Test Runs Analysis
+*Started Sept 11, 2026
+
+## Goals
+We have two (actually three) test runs where we have run the new ONT-LMGSeq primers on the MinION with flu coinfections. We had three goals with those test runs.
+
+1. Verify that LMGSeq in its ONT iteration works as planned for known coinfections (data quality and reassortment)
+2. Examine whether lower concentrations of RT can be used.
+3. Determine if we can reconfirm triple reassortants
+
+## Data
+
+Three ONT runs:
+1. CA09xPAN99 Coinfection: One full run that
+2. Triple/Quad Coinfection (includes 2 doubles, one triple, and one quad)
+3. Concentration Test
+
+## Approach
+We'll start with CA09xPAN99 full run. It provides the simplest case where we don't have to deal with other data, it's just one run, one coinfection. Let's keep it relatively high level and get stats overall for sequencing and demultiplexing. If it looks reasoable on the demultiplexing side (meaning reads per plate/well), don't spend too much effort on that. A quick fix that might be necessary is just using cross2. Probably a major focus is going to be the database matching.
+
+### Environment Set up
+
+```{bash}
+ssh sldmunoz@franklin.hpc.ucdavis.edu
+
+#Load conda as a module
+module load conda/base
+
+#Slurm interactive
+srun -c 1 -t 12:00:00 --mem=10000 --pty /bin/bash
+#This job is just to set up data and working directories
+
+#Navigate to the lab group directory
+cd /group/sldmunozgrp
+
+#Get to the working directory that Courtney set up for me
+/group/sldmunozgrp/cysto_LMGSeq08-25/sam_basecalled_flu_2025
+```
+
+#### CA09/PAN99 Coinfection Analysis 
+
+Now we start to look into. First let's get to the results with the pipeline as is (as of Sept 11, 2026)
+
+What is the working directory for this run?
+```{bash}
+cd /group/sldmunozgrp/cysto_LMGSeq08-25/sam_basecalled_flu_2025/CA09xPAN99_102325
+```
+
+The source FASTQ is `CA09xPAN99_calls_2025-12-17_T21-10-01.fastq`. Let's start there and see how many reads we are working with
+
+```{bash}
+#Number of reads in the main FASTQ
+wc -l CA09xPAN99_calls_2025-12-17_T21-10-01.fastq | awk '{print $2 " , " $1/4}'
+#CA09xPAN99_calls_2025-12-17_T21-10-01.fastq , 3524782
+```
+
+Okay so 3,524,782 or 3.5M reads roughly. Which by the way, seems very low. Next we will look at the reads remaining after each step.
+
+```{bash}
+#Reads after Porechop
+wc -l porechop_outputs/CA09xPAN99_calls_2025-12-17_T21-10-01_porechop.fastq | awk '{print $2 " , " $1/4}'
+#porechop_outputs/CA09xPAN99_calls_2025-12-17_T21-10-01_porechop.fastq , 5686122
+#Note, these could end up being *more* reads because of read splitting. 
+#Indeed way more! 5,686,122 roughly 5.7M reads. Seems like a lot? 
+
+#Reads after Cutadapt Plate Demultiplexing
+
+#Reads after Cutadapt Well demultiplexing
+
+#Reads after usearch Strain Assignment
+```
+
+
+
+
+
