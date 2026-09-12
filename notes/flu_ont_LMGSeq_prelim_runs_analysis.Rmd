@@ -69,12 +69,52 @@ wc -l porechop_outputs/CA09xPAN99_calls_2025-12-17_T21-10-01_porechop.fastq | aw
 #Indeed way more! 5,686,122 roughly 5.7M reads. Seems like a lot? 
 
 #Reads after Cutadapt Plate Demultiplexing
+less plate_CA09xPAN99_calls_2025-12-17_T21-10-01_cutadapt_porechop.log
+#Reads with adapters:                 3,962,030 (69.7%)
+#Looks like only finding 69% 
+
+#Examining more closely looks like plate02 was trimmed 3,959,814, or 3959814/3962030 = 0.9994407 over 99.94% of trimmed reads were plate 2, so that's great
+
+#Quick note that of those plate02 reads, 2440777 or (2440777/3959814=0.6163868) 61.39% of them were reverse complements, which is more or less in line with what we expect
 
 #Reads after Cutadapt Well demultiplexing
+#The script output a file with number of demultiplexed reads per plate/well
+less read_counts_demultiplexed_CA09xPAN99.txt
 
-#Reads after usearch Strain Assignment
+#A visual inspection has most of the reads in plate02 wells mostly singletons in other 
+
+
 ```
 
+Had Claude make me a custom script to summarize the demultiplexing stats (after PoreChop/Cutadapt). That file is `cutadapt_demultiplexing_stats_qc.R`
+
+Also downloaded the `read_counts_demultiplexed_CA09xPAN99.txt` file to `outputs`.
+
+Here's some results:
+Plate 2 has 2,849,010 reads. Which is more than any cross in the 2023 paper (mean reads / cross = 968,866 reads, range 219,326–1,544,248)
+
+Within plate 2 here's what it looks like for the wells:
+  n_wells mean_reads sd_reads min_reads max_reads
+    <int>      <dbl>    <dbl>     <int>     <int>
+1      96     29677.   38017.         3    167498
+
+Some wells are really low, but on average that's 29,677 reads per sample, which is *plenty*. Looks like from the 2023 paper the average reads per well are 10,570, if I'm reading the code right (not in the paper). So again more, which makes sense, but not as much as you would think given that I only have only one cross for the whole flow cell.
+
+Also have quite a few wells, 22, that seemingly dropped off
+
+`plate02: 22 well(s) with reads < 1% of plate mean (possible failed wells): well12, well24, well33, well35, well36, well46, well47, well48, well55, well58, well59, well60, well66, well71, well72, well77, well81, well82, well83, well84, well95, well96`
+
+```{bash}
+#Reads after usearch Strain Assignment
+
+
+```
+
+Need to loop back to detail the findings, but bascially the reassortment rate is much lower, but in general the segment with the most reaasortment is NS and NP, though way less. The segment representation plotwith reassortants only, actually looks    
+
+```{r}
+
+```
 
 
 
