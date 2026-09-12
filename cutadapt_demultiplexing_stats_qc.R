@@ -3,6 +3,28 @@ library(readr)
 library(dplyr)
 
 # ============================================================================
+# Per-well QC: raw demultiplexed reads vs. reads reaching the genotyping
+# pipeline. IMPORTANT: the demux read-count file contains rows for every
+# plate it saw barcode hits for, not just this one -- filter to your plate
+# before computing any cutoffs/statistics on it.
+# ============================================================================
+raw_read_counts <- read_csv(
+  "read_counts_demultiplexed_CA09xPAN99.txt",
+  col_names = c("n_reads_raw_demux", "plate_well", "filename"),
+  col_types = cols(n_reads_raw_demux = col_integer(), plate_well = col_character(), filename = col_skip())
+) %>%
+  filter(grepl("^plate02_well", plate_well))   # scope to the plate you're analyzing
+
+well_qc <- raw_read_counts %>%
+  left_join(well_summary, by = c("plate_well" = "file")) %>%
+  mutate(pct_demux_reaching_pipeline = total_reads_well / n_reads_raw_demux)
+
+high_raw_cutoff <- median(well_qc$n_reads_raw_demux)
+flagged <- well_qc %>%
+  filter(n_reads_raw_demux > high_raw_cutoff) %>%
+  arrange(pct_demux_reaching_pipeline)
+
+# ============================================================================
 # Import
 # ============================================================================
 # No header in the file, so we name columns explicitly.
