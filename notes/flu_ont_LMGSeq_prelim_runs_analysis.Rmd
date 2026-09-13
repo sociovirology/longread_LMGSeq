@@ -39,7 +39,7 @@ srun -c 1 -t 12:00:00 --mem=10000 --pty /bin/bash
 cd /group/sldmunozgrp
 
 #Get to the working directory that Courtney set up for me
-/group/sldmunozgrp/cysto_LMGSeq08-25/sam_basecalled_flu_2025
+cd /group/sldmunozgrp/cysto_LMGSeq08-25/sam_basecalled_flu_2025
 ```
 
 #### CA09/PAN99 Coinfection Analysis 
@@ -110,12 +110,212 @@ Also have quite a few wells, 22, that seemingly dropped off
 
 ```
 
-Need to loop back to detail the findings, but bascially the reassortment rate is much lower, but in general the segment with the most reaasortment is NS and NP, though way less. The segment representation plotwith reassortants only, actually looks    
+Need to loop back to detail the findings, but bascially the reassortment rate is much lower, but in general the segment with the most reaasortment is NS and NP, though way less. The segment representation plot with reassortants only, actually looks comparable to the earlier plot (albeit to the all plot).
 
-```{r}
+*Sept 12, 2026*
+
+The thing that is sticking out to me is how many reads in the well are going unmatched by usearch (come to think of it, this should be in the quality control measures). Want to check the matches, the databases, and don't forget the amplicon, i.e. does it have ONT landing pad, uni regions, etc?  
+
+My approach will be to sandbox this within the working folder and examine them carefully 
+
+Asked Claude to find a well supported parental and a reassortant sample that is well supported, ideally at multiple segments, but that still has a lot of reads unassigned. So I'll be working with:
+Parental:     plate02_well17
+Reassortant:  plate02_well75   
+
+```{bash}
+#Get into working directory
+cd /group/sldmunozgrp/cysto_LMGSeq08-25/sam_basecalled_flu_2025/CA09xPAN99_102325/
+
+#Where is the YML?
+#Can't find it, so going to go off the output headers to find the versions
+
+#My starting point is going to be the demultiplexed (from cutadapt) FASTQ's so let's get those and put them in a subfolder of the main working folder
+mkdir /group/sldmunozgrp/cysto_LMGSeq08-25/sam_basecalled_flu_2025/sam_analyses/
+cd /group/sldmunozgrp/cysto_LMGSeq08-25/sam_basecalled_flu_2025/sam_analyses/
+
+#Starting with plate02_well75 our reassortant representative
+cp /group/sldmunozgrp/cysto_LMGSeq08-25/sam_basecalled_flu_2025/CA09xPAN99_102325/cutadapt_outputs/plate02/well75/plate02_well75_CA09xPAN99_calls_2025-12-17_T21-10-01_cutadapt_porechop.fastq .
+
+#Let's create an environment 
+conda create -n longread_lmgseq_temp python=3.12.11 cutadapt=5.2 usearch=11.0.667
+
+#Got it, now activate
+conda activate longread_lmgseq_temp 
+
+#First thing is to inspect the fastq - I especially want to get a sense of whether DelVGs are playing a role here
+less plate02_well75_CA09xPAN99_calls_2025-12-17_T21-10-01_cutadapt_porechop.fastq
+
+#Going to look at read length distributions, with a couple of scripts provided by Claude
+
+#Length summary stats
+awk 'NR%4==2 {print length($0)}' plate02_well75_CA09xPAN99_calls_2025-12-17_T21-10-01_cutadapt_porechop.fastq | sort -n | awk '{a[NR]=$1; sum+=$1} END {print "n="NR, "min="a[1], "max="a[NR], "mean="sum/NR, "median="a[int(NR/2)]}'
+#n=8121 min=0 max=4270 mean=196.558 median=4
+#Median is weird
+
+#Read length distribution
+awk 'NR%4==2 {print length($0)}' plate02_well75_CA09xPAN99_calls_2025-12-17_T21-10-01_cutadapt_porechop.fastq | sort -n | uniq -c | awk '{print $2"\t"$1}' > plate_02_well75_demux_fastq_read_length_distribution.txt
+
+#Okay confirmed, lots of reads at 4bp. Not good obviously. Not many polymerase reads. Let's do the same for the parental representative read (see separate section below)
+
+#Now looking at how well formed these amplicons are, using code I made from Ile's projects
+#Are there landing pads here?
+#First get rid of ONT landing pad
+cutadapt -a TTTCTGTTGGTGCTGATATTG...GAAGATAGAGCGACAGGCAAGT -a ACTTGCCTGTCGCTCTATCTTC...CAATATCAGCACCAACAGAAA -o plate02_well75_ont_landing_pad.fastq plate02_well75_CA09xPAN99_calls_2025-12-17_T21-10-01_cutadapt_porechop.fastq --untrimmed-output=plate02_well75_ont_landing_pad_untrimmed.fastq --action=lowercase > plate02_well75_ont_landing_pad.txt
+#0.4% of reads with adapters. Most of these were very short, adapter-only reads, so I'll call itpretty close to the zero I got in the other test sample.
+
+-usearch_global /group/sldmunozgrp/cysto_LMGSeq08-25/sam_basecalled_flu_2025/CA09xPAN99_102325/cutadapt_outputs/plate02/well75/plate02_well75_CA09xPAN99_calls_2025-12-17_T21-10-01_cutadapt_porechop.fastq -db ${demuxed_path}/${database_file} -id 0.90 -blast6out ${demuxed_path}/${coinfection}/${plate}/${plate}_${well}_90_merged.b6 -strand both -top_hit_only
+
+
+### plate02_well17 ###
+
+cd /group/sldmunozgrp/cysto_LMGSeq08-25/sam_basecalled_flu_2025/sam_analyses/
+
+#Now plate02_well17 our parental representative
+cp /group/sldmunozgrp/cysto_LMGSeq08-25/sam_basecalled_flu_2025/CA09xPAN99_102325/cutadapt_outputs/plate02/well17/plate02_well17_CA09xPAN99_calls_2025-12-17_T21-10-01_cutadapt_porechop.fastq .
+
+#First thing is to inspect the fastq - I especially want to get a sense of whether DelVGs are playing a role here
+less plate02_well17_CA09xPAN99_calls_2025-12-17_T21-10-01_cutadapt_porechop.fastq
+
+#Going to look at read length distributions, with a couple of scripts provided by Claude
+
+#Length summary stats
+awk 'NR%4==2 {print length($0)}' plate02_well17_CA09xPAN99_calls_2025-12-17_T21-10-01_cutadapt_porechop.fastq | sort -n | awk '{a[NR]=$1; sum+=$1} END {print "n="NR, "min="a[1], "max="a[NR], "mean="sum/NR, "median="a[int(NR/2)]}'
+#n=167498 min=3 max=6078 mean=1030.91 median=1005
+#Ok, this looks more reasoable
+
+#Read length distribution
+awk 'NR%4==2 {print length($0)}' plate02_well17_CA09xPAN99_calls_2025-12-17_T21-10-01_cutadapt_porechop.fastq | sort -n | uniq -c | awk '{print $2"\t"$1}' > plate02_well17_demux_fastq_read_length_distribution.txt
+
+#This looks *way* more reasonable, clear peaks where the full length segments should be. Notably the suspected DelVG peaks are pretty clear. I am more curious now about these very long reads, one 6kb!!
+
+#Going to check with a Claude-made oneliner
+awk 'NR%4==2{if(length($0)>maxlen){maxlen=length($0);seq=$0}}END{print seq}' plate02_well17_CA09xPAN99_calls_2025-12-17_T21-10-01_cutadapt_porechop.fastq
+
+#Hard to conclude here with just less or BLAST, lets move on
+
+#Now looking at how well formed these amplicons are, using code I made from Ile's projects
+
+#Are there landing pads here?
+#First get rid of ONT landing pad
+cutadapt -a TTTCTGTTGGTGCTGATATTG...GAAGATAGAGCGACAGGCAAGT -a ACTTGCCTGTCGCTCTATCTTC...CAATATCAGCACCAACAGAAA -o plate02_well17_ont_landing_pad.fastq plate02_well17_CA09xPAN99_calls_2025-12-17_T21-10-01_cutadapt_porechop.fastq --untrimmed-output=plate02_well17_ont_landing_pad_untrimmed.fastq --action=lowercase > plate02_well17_ont_landing_pad.txt
+#Zero, so I will assume they have been taken off
+
+#Now let's check for the uni primers
+cutadapt -a AGCAAAAGCAGG...CCTTGTTTCTACT -a AGTAGAAACAAGG...CCTGCTTTTGC -o plate02_well17_uni.fastq plate02_well17_CA09xPAN99_calls_2025-12-17_T21-10-01_cutadapt_porechop.fastq --untrimmed-output=plate02_well17_uni_untrimmed.fastq --action=lowercase > plate02_well17_uni.txt
+
+#This looks great!
+#Total reads processed:                 167,498
+#Reads with adapters:                   165,932 (99.1%)
+
+#Sequence: AGTAGAAACAAGG...CCTGCTTTTGC; Type: linked; Length: 13+11; 5' trimmed: 156368 times; 3' trimmed: 152905 times
+#Interestingly way more Adapter 2 trimmed, did the reads get reverse complemented in the upstream script?
+
+#Peeking at the untrimmed
+less plate02_well17_uni_untrimmed.fastq
+#Looks like a lot of good reads there. Blasted a couple of them and they are in fact complete reads. Many but not all have an rc label
+
+#Visual inspection of the lowercase... looks really clean. At the end and beginning
+less plate02_well17_uni.fastq
+
+#What happened to the longest read?
+awk 'NR%4==2{if(length($0)>maxlen){maxlen=length($0);seq=$0}}END{print seq}' plate02_well17_uni.fastq
+#It obliterated the read on the F side leaving a fragment that matches to H3N2 NS (HK and PAN99 included)
+
+#Now let's actually trim
+cutadapt -a AGCAAAAGCAGG...CCTTGTTTCTACT -a AGTAGAAACAAGG...CCTGCTTTTGC -o final_plate02_well17_uni.fastq plate02_well17_CA09xPAN99_calls_2025-12-17_T21-10-01_cutadapt_porechop.fastq --discard-untrimmed > final_plate02_well17_uni.txt
+
+less final_plate02_well17_uni.txt
+#Total basepairs processed:   172,674,772 bp
+#Total written (filtered):    166,901,534 bp (96.7%)
+#Looks great, and seems like keeping most of the length of reads, consitent with uni trimming at the ends
+
+#Finally, down to the usearching. Let's go!!
+
+#First let's find the database and copy 
+cd /group/sldmunozgrp/cysto_LMGSeq08-25/sam_basecalled_flu_2025/sam_analyses/
+cp /group/sldmunozgrp/cysto_LMGSeq08-25/sam_basecalled_flu_2025/CA09xPAN99_102325/genotyping_outputs/CA09_PAN99_CA09_PAN99.fasta .
+
+#Interesting that everything was copied twice. Let's keep as is and then see if that has an effect
+usearch -usearch_global final_plate02_well17_uni.fastq -db CA09_PAN99_CA09_PAN99.fasta -id 0.90 -blast6out plate02_well17_orig_database_90_merged.b6 -strand both -top_hit_only
+#Super slow... Interesting. But pretty high percentage match right off the bat
+#09:23 120Mb   100.0% Searching, 81.6% matched
+
+#Ended up at 81.6%, which I think is way higher than before (EDIT: Or was it?)
+less plate02_well17_orig_database_90_merged.b6
+#Looks actually really, really good.
+
+#Now let's look at the summary
+#Will need to piece it together
+#Using part of the one-liner
+cut -f 2 plate02_well17_orig_database_90_merged.b6 | cut -d , -f 1 | sort | uniq -c | sort -nr 
+#Not complete, asking Claude for a one-liner
+cut -f 2 plate02_well17_orig_database_90_merged.b6 | cut -d , -f 1 | sort | uniq -c | \
+awk '{
+  n = $1; strain_seg = $2
+  split(strain_seg, a, "_"); locus = a[2]
+  total[locus] += n
+  if (n > max[locus]) { max[locus] = n; best[locus] = strain_seg }
+}
+END {
+  OFS = "\t"
+  for (loc in best) printf "%s\t%d\t%d\t%.4f\n", best[loc], max[loc], total[loc], max[loc]/total[loc]
+}' | sort -k2,2 -nr
+#PAN99_NS	50207	50213	0.9999
+#PAN99_M	46103	46109	0.9999
+#PAN99_NP	15931	15932	0.9999
+#PAN99_NA	15157	15157	1.0000
+#PAN99_HA	5652	5652	1.0000
+#PAN99_PA	1111	1112	0.9991
+#PAN99_PB1	1011	1012	0.9990
+#PAN99_PB2	838	838	1.0000
+
+
+#Directly compare whether the uni trimming did anything to the assignment rate. So now not uni trimmed FASTQ
+usearch -usearch_global plate02_well17_CA09xPAN99_calls_2025-12-17_T21-10-01_cutadapt_porechop.fastq -db CA09_PAN99_CA09_PAN99.fasta -id 0.90 -blast6out plate02_well17_orig_database_90_merged.b6 -strand both -top_hit_only
+#09:32 133Mb   100.0% Searching, 81.2% matchedpected 1600:58 118Mb    10.2% Searching, 82.1% matched
+#Yeah maybe a tiny bit. 81.6% and 82.1%
+
+#My guess is that when I change the duplicates in the database that it will be quicker assignment. Let's check
+#Fix database
+cp CA09_PAN99_CA09_PAN99.fasta CA09_PAN99.fasta
+
+#Remove duplicates, 
+vi CA09_PAN99.fasta
+
+#Same command, just changing the database and the output names
+usearch -usearch_global final_plate02_well17_uni.fastq -db CA09_PAN99.fasta -id 0.90 -blast6out plate02_well17_corrected_db_90.b6 -strand both -top_hit_only
+#07:44 55Mb    100.0% Searching, 81.6% matched
+#Actually does not look faster, really. But moving forward with this, because it is the right thing
+
+
+cut -f 2 plate02_well17_corrected_db_90.b6 | cut -d , -f 1 | sort | uniq -c | \
+awk '{
+  n = $1; strain_seg = $2
+  split(strain_seg, a, "_"); locus = a[2]
+  total[locus] += n
+  if (n > max[locus]) { max[locus] = n; best[locus] = strain_seg }
+}
+END {
+  OFS = "\t"
+  for (loc in best) printf "%s\t%d\t%d\t%.4f\n", best[loc], max[loc], total[loc], max[loc]/total[loc]
+}' | sort -k2,2 -nr
+#PAN99_NS	49944	49950	0.9999
+#PAN99_M	45945	45950	0.9999
+#PAN99_NP	15851	15852	0.9999
+#PAN99_NA	15026	15026	1.0000
+#PAN99_HA	5635	5635	1.0000
+#PAN99_PA	1104	1105	0.9991
+#PAN99_PB1	1007	1008	0.9990
+#PAN99_PB2	832	832	1.0000
 
 ```
 
+OK, hanging it up for now, but here are a few things to do when I pick this up again:
+1. Change the filenames to reflect the database and uni trimming changes
+2. Play around with the thresholds pid and the global/local matching. Is there a way I can get unmatched
+3. Once I increase the percentage, scale to the rest of the wells and check results in R
+4. 
 
+-Finish
 
 
