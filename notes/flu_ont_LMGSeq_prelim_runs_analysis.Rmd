@@ -161,9 +161,47 @@ awk 'NR%4==2 {print length($0)}' plate02_well75_CA09xPAN99_calls_2025-12-17_T21-
 #Are there landing pads here?
 #First get rid of ONT landing pad
 cutadapt -a TTTCTGTTGGTGCTGATATTG...GAAGATAGAGCGACAGGCAAGT -a ACTTGCCTGTCGCTCTATCTTC...CAATATCAGCACCAACAGAAA -o plate02_well75_ont_landing_pad.fastq plate02_well75_CA09xPAN99_calls_2025-12-17_T21-10-01_cutadapt_porechop.fastq --untrimmed-output=plate02_well75_ont_landing_pad_untrimmed.fastq --action=lowercase > plate02_well75_ont_landing_pad.txt
-#0.4% of reads with adapters. Most of these were very short, adapter-only reads, so I'll call itpretty close to the zero I got in the other test sample.
+#0.4% of reads with adapters. Most of these were very short, adapter-only reads, so I'll call it pretty close to the zero I got in the other test sample.
 
--usearch_global /group/sldmunozgrp/cysto_LMGSeq08-25/sam_basecalled_flu_2025/CA09xPAN99_102325/cutadapt_outputs/plate02/well75/plate02_well75_CA09xPAN99_calls_2025-12-17_T21-10-01_cutadapt_porechop.fastq -db ${demuxed_path}/${database_file} -id 0.90 -blast6out ${demuxed_path}/${coinfection}/${plate}/${plate}_${well}_90_merged.b6 -strand both -top_hit_only
+#Now let's check for the uni primers
+cutadapt -a AGCAAAAGCAGG...CCTTGTTTCTACT -a AGTAGAAACAAGG...CCTGCTTTTGC -o plate02_well75_uni.fastq plate02_well75_CA09xPAN99_calls_2025-12-17_T21-10-01_cutadapt_porechop.fastq --untrimmed-output=plate02_well75_uni_untrimmed.fastq --action=lowercase > plate02_well75_uni.txt
+#This looks just ok 
+#Total reads processed:                   8,121
+#Reads with adapters:                     3,626 (44.6%)
+
+less plate02_well75_uni.fastq
+#At least looks like it trimmed where it should
+
+#Now let's actually trim
+cutadapt -a AGCAAAAGCAGG...CCTTGTTTCTACT -a AGTAGAAACAAGG...CCTGCTTTTGC -o final_plate02_well75_uni.fastq plate02_well75_CA09xPAN99_calls_2025-12-17_T21-10-01_cutadapt_porechop.fastq --discard-untrimmed > final_plate02_well75_uni.txt
+
+less final_plate02_well75_uni.txt
+#Same as before, as expected
+
+#Now usearch
+usearch -usearch_global final_plate02_well75_uni.fastq -db CA09_PAN99.fasta -id 0.90 -blast6out plate02_well75_corrected_db_90.b6 -strand both -top_hit_only
+#00:05 50Mb    100.0% Searching, 43.9% matched
+#Only 44% matched
+
+#Let's summarize
+cut -f 2 plate02_well75_corrected_db_90.b6 | cut -d , -f 1 | sort | uniq -c | \
+awk '{
+  n = $1; strain_seg = $2
+  split(strain_seg, a, "_"); locus = a[2]
+  total[locus] += n
+  if (n > max[locus]) { max[locus] = n; best[locus] = strain_seg }
+}
+END {
+  OFS = "\t"
+  for (loc in best) printf "%s\t%d\t%d\t%.4f\n", best[loc], max[loc], total[loc], max[loc]/total[loc]
+}' | sort -k2,2 -nr
+#CA09_NS	  845	908	0.9306
+#PAN99_M	  458	463	0.9892
+#PAN99_HA	  173	173	1.0000
+#PAN99_PB1	23	23	1.0000
+#PAN99_NA	  11	13	0.8462
+#PAN99_NP	  10	10	1.0000
+#PAN99_PA	  2	2	1.0000
 
 
 ### plate02_well17 ###
@@ -202,7 +240,6 @@ cutadapt -a TTTCTGTTGGTGCTGATATTG...GAAGATAGAGCGACAGGCAAGT -a ACTTGCCTGTCGCTCTAT
 
 #Now let's check for the uni primers
 cutadapt -a AGCAAAAGCAGG...CCTTGTTTCTACT -a AGTAGAAACAAGG...CCTGCTTTTGC -o plate02_well17_uni.fastq plate02_well17_CA09xPAN99_calls_2025-12-17_T21-10-01_cutadapt_porechop.fastq --untrimmed-output=plate02_well17_uni_untrimmed.fastq --action=lowercase > plate02_well17_uni.txt
-
 #This looks great!
 #Total reads processed:                 167,498
 #Reads with adapters:                   165,932 (99.1%)
@@ -314,8 +351,21 @@ OK, hanging it up for now, but here are a few things to do when I pick this up a
 1. Change the filenames to reflect the database and uni trimming changes
 2. Play around with the thresholds pid and the global/local matching. Is there a way I can get unmatched
 3. Once I increase the percentage, scale to the rest of the wells and check results in R
-4. 
 
--Finish
+*September 14, 2026*
+
+Some takeaways after chat with Courtney during check-in. First, the uni12/13 primer trimming didn't really do much. In the end, the. The duplication of the genomes in the reference database didn't affect much either. Maybe two things to follow-up on is the loss of reads at the cutadapt stage (only 69.7%), but still plenty of reads to work with and the all reads being in one orientation after uni12/13 trimming.  
+
+Courtney's recommendation was to look at the database first and I agree.
+
+*September 15, 2026*
+
+Focus today is going to be checking the database and adjusting to see the results. My main hypothesis is that CA09 isn't matching well at all. However, I am only somewhat certain that plate02_well07 is pure PAN99, don't have an equivalent for CA09. 
+
+```{bash}
+#
+
+```
+
 
 
