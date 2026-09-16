@@ -806,10 +806,6 @@ Alignment length looks great, seems like local will try to do the longest match 
 
 ALSO: Check the extended reference to see if it gets better
 
-
-Going from global → local (same non-extended reference), recovery per segment:
-
-
 *Afternoon Update*
 
 I asked Claudio to summarize the results above and it concluded that it was the alignment mode, not the reference, which was evident, but the more importantly showed that "under local alignment" [all segments improve somewhat], but "PB1, PB2, and PA — the three polymerase-complex segments — improve dramatically more than the rest.". See the table below. Obviously this suggests DelVGs might actually be at play.
@@ -1016,3 +1012,107 @@ python3 extend_consensus_ends.py \
     --min-support 5 \
     --max-overhang 80
 ```
+
+*Sept 16, 2026*
+
+So, seems like the takeaway from the first attempt to make a CA09 consensus from one of the well93 is that lowkey shouldn't have done it. BUT it is very nice, because in some way shows that the LMGSeq concept works regardless of using usearch or an aligner (one obviously a better tool).  
+
+Here's what Claudio had to say, for the record:
+
+"-PB2 and NA are absent — confirmed, no reads mapped to these segments.
+-M and NS look great — 0 and 3 SNPs respectively against the CA09 reference. These are genuine CA09 consensus sequences.
+-PB1, PA, NP, and HA have massive SNP counts — 1,073 / 1,788 / 1,002 / 1,089 SNPs. At those rates (47–92 SNPs per 100 nt) these are not real SNPs between lab-adapted CA09 strains. They are almost certainly reads from PAN99 (the dominant strain in well93) that were homologous enough to align to the CA09 reference segments at the minimap2 mapping step, producing a chimeric consensus that is neither CA09 nor PAN99. The HA is the most extreme case — at 92% divergence it's essentially two unrelated sequences, which makes biological sense since CA09 is H1N1 and PAN99 is H3N2 and their HAs are from completely different subtypes."
+
+For today, we'll move to finding a pure CA09 sample to make a new reference. Then we'll run the pipeline again for plate02 with the main change being the usearch-local flag. 
+
+Ok, so settled on a control sample from the DelVG drug screen (barcode73). This is not an ideal sample as it's plaque passaged and went through a cycle of infection. Also note the file I am using has umi's outside of the uni12/13 primers. I'll revisit all the genomes with ONT data that I have from another run. 
+
+```{bash}
+#Copying the CA09 sample
+cd /group/sldmunozgrp/cysto_LMGSeq08-25/sam_basecalled_flu_2025/sam_analyses
+cp /group/sldmunozgrp/dvg_drug_screen_ile_v2/final_barcode73.fastq .
+
+vi consensus.sh
+ #Copy pasted below after clearing
+```
+
+```{bash}
+#!/bin/bash
+# Map a CA09 sample (with above caveats) reads to the CA09 reference and build a new
+# consensus, one sequence per segment.
+
+READS="final_barcode73.fastq"
+REF="CA09.fasta"
+OUT_PREFIX="CA09_barcode73_consensus"
+MIN_DEPTH=5
+
+minimap2 -ax map-ont "$REF" "$READS" > "${OUT_PREFIX}.sam"
+samtools sort -o "${OUT_PREFIX}.sorted.bam" "${OUT_PREFIX}.sam"
+samtools index "${OUT_PREFIX}.sorted.bam"
+
+samtools flagstat "${OUT_PREFIX}.sorted.bam"
+samtools idxstats "${OUT_PREFIX}.sorted.bam"
+
+samtools consensus --min-depth "$MIN_DEPTH" -o "${OUT_PREFIX}.fasta" "${OUT_PREFIX}.sorted.bam"
+
+# Count Ns per segment in the new consensus
+awk '/^>/{if(seq) print name, gsub(/N/,"N",seq); name=$0; seq=""; next} {seq=seq $0} END{if(seq) print name, gsub(/N/,"N",seq)}' "${OUT_PREFIX}.fasta"
+```
+
+
+```{bash}
+#Run Script
+./consensus.sh
+#[M::mm_idx_gen::0.017*0.29] collected minimizers
+#[M::mm_idx_gen::0.018*0.34] sorted minimizers
+#[M::main::0.018*0.34] loaded/built the index for 8 target sequence(s)
+#[M::mm_mapopt_update::0.018*0.34] mid_occ = 10
+#[M::mm_idx_stat] kmer size: 15; skip: 10; is_hpc: 0; #seq: 8
+#[M::mm_idx_stat::0.018*0.35] distinct minimizers: 2403 (100.00% are singletons); average occurrences: 1.000; average spacing: 5.499; total length: 13215
+#[M::worker_pipeline::20.836*1.00] mapped 63770 sequences
+#[M::main] Version: 2.31-r1302
+#[M::main] CMD: minimap2 -ax map-ont CA09.fasta final_barcode73.fastq
+#[M::main] Real time: 20.846 sec; CPU: 20.816 sec; Peak RSS: 0.176 GB
+#64760 + 0 in total (QC-passed reads + QC-failed reads)
+#63770 + 0 primary
+#0 + 0 secondary
+#990 + 0 supplementary
+#0 + 0 duplicates
+#0 + 0 primary duplicates
+#60424 + 0 mapped (93.30% : N/A)
+#59434 + 0 primary mapped (93.20% : N/A)
+#0 + 0 paired in sequencing
+#0 + 0 read1
+#0 + 0 read2
+#0 + 0 properly paired (N/A : N/A)
+#0 + 0 with itself and mate mapped
+#0 + 0 singletons (N/A : N/A)
+#0 + 0 with mate mapped to a different chr
+#0 + 0 with mate mapped to a different chr (mapQ>=5)
+#CA09_PB2	2280	2207	0
+#CA09_HA	1701	4622	0
+#CA09_M	982	17290	0
+#CA09_NP	1497	7361	0
+#CA09_NA	1410	6865	0
+#CA09_PA	2208	3005	0
+#CA09_PB1	2274	863	0
+#CA09_NS	863	18211	0
+#*	0	0	4336
+#>CA09_PB2 1
+#>CA09_HA 2
+#>CA09_M 0
+#>CA09_NP 0
+#>CA09_NA 0
+#>CA09_PA 0
+#>CA09_PB1 1
+#>CA09_NS 0
+
+#Now let's try to extend
+python3 extend_consensus_ends.py \
+    --bam CA09_barcode73_consensus.sorted.bam \
+    --consensus CA09_barcode73_consensus.fasta \
+    --out CA09_barcode73_consensus_extended_v3.fasta \
+    --min-support 5 \
+    --max-overhang 80
+```
+
