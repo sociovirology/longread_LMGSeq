@@ -297,14 +297,14 @@ END {
   OFS = "\t"
   for (loc in best) printf "%s\t%d\t%d\t%.4f\n", best[loc], max[loc], total[loc], max[loc]/total[loc]
 }' | sort -k2,2 -nr
-#PAN99_NS	50207	50213	0.9999
-#PAN99_M	46103	46109	0.9999
-#PAN99_NP	15931	15932	0.9999
-#PAN99_NA	15157	15157	1.0000
-#PAN99_HA	5652	5652	1.0000
-#PAN99_PA	1111	1112	0.9991
-#PAN99_PB1	1011	1012	0.9990
-#PAN99_PB2	838	838	1.0000
+#PAN99_NS	49944	49950	0.9999
+#PAN99_M	45945	45950	0.9999
+#PAN99_NP	15851	15852	0.9999
+#PAN99_NA	15026	15026	1.0000
+#PAN99_HA	5635	5635	1.0000
+#PAN99_PA	1104	1105	0.9991
+#PAN99_PB1	1007	1008	0.9990
+#PAN99_PB2	832	832	1.0000
 
 
 #Directly compare whether the uni trimming did anything to the assignment rate. So now not uni trimmed FASTQ
@@ -363,9 +363,455 @@ Courtney's recommendation was to look at the database first and I agree.
 Focus today is going to be checking the database and adjusting to see the results. My main hypothesis is that CA09 isn't matching well at all. However, I am only somewhat certain that plate02_well07 is pure PAN99, don't have an equivalent for CA09. 
 
 ```{bash}
-#
+#First let's make individual databases for CA09 and PAN99. Grep. Actually, need to remove the wrap from the FASTA first
+
+#PAN99
+awk 'BEGIN {RS=">";FS="\n"} NR>1 {seq=""; for (i=2;i<=NF;i++) seq=seq$i; print ">"$1"\n"seq}' CA09_PAN99.fasta | grep -A 1 "PAN99" > PAN99.fasta
+
+#CA09
+awk 'BEGIN {RS=">";FS="\n"} NR>1 {seq=""; for (i=2;i<=NF;i++) seq=seq$i; print ">"$1"\n"seq}' CA09_PAN99.fasta | grep -A 1 "CA09" > CA09.fasta
+
+#Now let's try to align
+```
+
+Asked Claudio to make a script to align reads with minimap2
+
+```{bash}
+#!/bin/bash
+# Map presumed-pure PAN99 reads to the PAN99 reference and build a new
+# consensus, one sequence per segment.
+
+READS="final_plate02_well17_uni.fastq"
+REF="PAN99.fasta"
+OUT_PREFIX="PAN99_well17_consensus"
+MIN_DEPTH=5
+
+minimap2 -ax map-ont "$REF" "$READS" > "${OUT_PREFIX}.sam"
+samtools sort -o "${OUT_PREFIX}.sorted.bam" "${OUT_PREFIX}.sam"
+samtools index "${OUT_PREFIX}.sorted.bam"
+
+samtools flagstat "${OUT_PREFIX}.sorted.bam"
+samtools idxstats "${OUT_PREFIX}.sorted.bam"
+
+samtools consensus --min-depth "$MIN_DEPTH" -o "${OUT_PREFIX}.fasta" "${OUT_PREFIX}.sorted.bam"
+
+# Count Ns per segment in the new consensus
+awk '/^>/{if(seq) print name, gsub(/N/,"N",seq); name=$0; seq=""; next} {seq=seq $0} END{if(seq) print name, gsub(/N/,"N",seq)}' "${OUT_PREFIX}.fasta"
+```
+
+Saved to a script
+
+```{bash}
+ vi consensus.sh
+ #Copy pasted
+ 
+chmod +x consensus.sh
+./consensus.sh
+#[M::mm_idx_gen::0.002*13.08] collected minimizers
+#[M::mm_idx_gen::0.003*9.74] sorted minimizers
+#[M::main::0.003*9.69] loaded/built the index for 8 target sequence(s)
+#[M::mm_mapopt_update::0.003*9.28] mid_occ = 10
+#[M::mm_idx_stat] kmer size: 15; skip: 10; is_hpc: 0; #seq: 8
+#[M::mm_idx_stat::0.003*8.96] distinct minimizers: 2473 (100.00% are singletons); average occurrences: 1.000; average #spacing: 5.408; total length: 13373
+#[M::worker_pipeline::40.605*1.00] mapped 165932 sequences
+#[M::main] Version: 2.31-r1302
+#[M::main] CMD: minimap2 -ax map-ont PAN99.fasta final_plate02_well17_uni.fastq
+#[M::main] Real time: 40.607 sec; CPU: 40.631 sec; Peak RSS: 0.393 GB
+#188422 + 0 in total (QC-passed reads + QC-failed reads)
+#165932 + 0 primary
+#1 + 0 secondary
+#22489 + 0 supplementary
+#0 + 0 duplicates
+#0 + 0 primary duplicates
+#188057 + 0 mapped (99.81% : N/A)
+#165567 + 0 primary mapped (99.78% : N/A)
+#0 + 0 paired in sequencing
+#0 + 0 read1
+#0 + 0 read2
+#0 + 0 properly paired (N/A : N/A)
+#0 + 0 with itself and mate mapped
+#0 + 0 singletons (N/A : N/A)
+#0 + 0 with mate mapped to a different chr
+#0 + 0 with mate mapped to a different chr (mapQ>=5)
+#PAN99_PB1	2311	41648	0
+#PAN99_HA	1731	5789	0
+#PAN99_M	999	48879	0
+#PAN99_NS	857	52187	0
+#PAN99_NA	1436	16482	0
+#PAN99_PA	2192	1837	0
+#PAN99_PB2	2310	3479	0
+#PAN99_NP	1537	17756	0
+#*	0	0	365
+#>PAN99_PB1 0
+#>PAN99_HA 0
+#>PAN99_M 0
+#>PAN99_NS 0
+#>PAN99_NA 0
+#>PAN99_PA 0
+#>PAN99_PB2 1
+#>PAN99_NP 0
+```
+
+Asked Claudio to compare the FASTA's and I got this
+"The reference is nearly perfect for 7 of 8 segments: PB2, PB1, PA, NP, M are all byte-for-byte identical. NA has a single SNP at position 940. NS has a single difference that turns out to be a non-issue (the reference has an IUPAC ambiguity code R (A/G) at position 427; the consensus called it as A — not a real variant at all). PB2 has one N at position 1124, which is the single low-depth position from the --min-depth 5 call we discussed."
+(Note: another model had HA polymorphisms at 9 but got blocked)
+
+"From the well17 comparison: minimap2 mapped 99.81% of reads (99.78% primary) to PAN99, vs. usearch matched 81.6% against the same well's reads. That's a gap of about 18 percentage points."
+
+Next, asked Claudio how to extend the consensus beyond the reference and it turns out that there's software designed by CDC: IRMA. For now, just using a quick python script Claudio generated.
+
+Script by Claudio: extend_consensus_ends.py
+```{bash}
+#!/usr/bin/env python3
+"""
+Recover well-supported read sequence that extends beyond the reference's
+5' and 3' boundaries, and splice it onto an existing samtools-consensus fasta.
+
+Why this is needed: minimap2 soft-clips any part of a read that would extend
+past the reference's coordinate system. That clipped sequence is still in the
+BAM (in the read's SEQ field), but samtools consensus / mpileup-based tools
+only build consensus within reference coordinates, so they never see it.
+
+Approach:
+1. For each segment (reference contig), find reads whose alignment starts
+   at reference position 0 (candidates for a 5' overhang) or ends at the
+   segment's last position (candidates for a 3' overhang).
+2. Pull each such read's soft-clipped bases at that specific end.
+3. Require a minimum number of reads agreeing before trusting an overhang
+   (same spirit as --min-depth on the reference-guided consensus).
+4. Build a consensus of the overhang sequences with spoa (a reference-free,
+   partial-order-alignment consensus tool -- no reference needed since these
+   sequences have no coordinate system to align to).
+5. Prepend/append the overhang consensus to the existing per-segment
+   consensus sequence.
+
+Requirements:
+    pip install pysam spoa --break-system-packages
+    (spoa also exists as a standalone CLI via bioconda if the python
+    bindings aren't available in your environment)
+
+Usage:
+    python3 extend_consensus_ends.py \\
+        --bam PAN99_well17_consensus.sorted.bam \\
+        --consensus PAN99_well17_consensus.fasta \\
+        --out PAN99_well17_consensus_extended.fasta \\
+        --min-support 5
+"""
+
+import argparse
+import subprocess
+import sys
+
+import pysam
+from Bio import SeqIO
+
+
+def get_end_overhangs(bam_path, contig, contig_len):
+    """Return (left_overhangs, right_overhangs): lists of soft-clipped
+    sequence from reads whose alignment abuts the contig's start/end."""
+    left_overhangs = []
+    right_overhangs = []
+
+    bam = pysam.AlignmentFile(bam_path, "rb")
+    for read in bam.fetch(contig):
+        if read.is_unmapped or read.is_secondary or read.is_supplementary:
+            continue  # keep this simple -- primary alignments only
+        cigar = read.cigartuples
+        if not cigar:
+            continue
+
+        # CIGAR ops relative to the reference: 4 = soft clip (S)
+        # A left overhang requires: alignment starts at ref position 0
+        # AND the CIGAR actually begins with a soft clip (i.e. there was
+        # something to clip, not just a read that happens to start there).
+        if read.reference_start == 0 and cigar[0][0] == 4:
+            clip_len = cigar[0][1]
+            if clip_len > 0:
+                left_overhangs.append(read.query_sequence[:clip_len])
+
+        # A right overhang requires: alignment ends at the last ref base
+        # AND the CIGAR ends with a soft clip.
+        if read.reference_end == contig_len and cigar[-1][0] == 4:
+            clip_len = cigar[-1][1]
+            if clip_len > 0:
+                right_overhangs.append(read.query_sequence[-clip_len:])
+
+    bam.close()
+    return left_overhangs, right_overhangs
+
+
+def spoa_consensus(sequences, tmp_prefix):
+    """Run spoa on a list of sequences with no reference, return consensus string.
+    Falls back to None if there's nothing usable to align."""
+    if not sequences:
+        return None
+
+    fasta_path = f"{tmp_prefix}.fasta"
+    with open(fasta_path, "w") as f:
+        for i, seq in enumerate(sequences):
+            f.write(f">read_{i}\n{seq}\n")
+
+    # -r 0 : output consensus only (no MSA)
+    result = subprocess.run(
+        ["spoa", "-r", "0", fasta_path],
+        capture_output=True, text=True
+    )
+    if result.returncode != 0:
+        print(f"  spoa failed on {fasta_path}: {result.stderr}", file=sys.stderr)
+        return None
+
+    lines = result.stdout.strip().splitlines()
+    # spoa's consensus output is a single fasta record; sequence is everything
+    # after the header line
+    seq_lines = [l for l in lines if not l.startswith(">")]
+    return "".join(seq_lines) if seq_lines else None
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--bam", required=True, help="Sorted, indexed BAM used to build the consensus")
+    ap.add_argument("--consensus", required=True, help="Existing per-segment consensus fasta to extend")
+    ap.add_argument("--out", required=True, help="Output fasta with extended segments")
+    ap.add_argument("--min-support", type=int, default=5,
+                     help="Minimum number of reads agreeing on an overhang before trusting it (default 5, matching your consensus min-depth)")
+    ap.add_argument("--max-overhang", type=int, default=150,
+                     help="Maximum allowed per-read soft-clip length to be included in overhang consensus "
+                          "(default 150). Reads with clips longer than this are almost certainly artifacts "
+                          "(cross-segment reads, chimeras) rather than genuine terminal sequence. "
+                          "Expected real overhangs from influenza A terminal NCRs are ~13-80 nt; "
+                          "anything in the hundreds is a red flag. After filtering, if fewer than "
+                          "--min-support reads remain the overhang is not extended.")
+    args = ap.parse_args()
+
+    consensus_records = {r.id: str(r.seq) for r in SeqIO.parse(args.consensus, "fasta")}
+    bam = pysam.AlignmentFile(args.bam, "rb")
+    contig_lengths = dict(zip(bam.references, bam.lengths))
+    bam.close()
+
+    out_records = []
+    for contig, seq in consensus_records.items():
+        if contig not in contig_lengths:
+            print(f"WARNING: {contig} not found in BAM header, leaving unchanged", file=sys.stderr)
+            out_records.append((contig, seq))
+            continue
+
+        contig_len = contig_lengths[contig]
+        left_overhangs, right_overhangs = get_end_overhangs(args.bam, contig, contig_len)
+
+        print(f"{contig}: {len(left_overhangs)} reads with a 5' overhang, "
+              f"{len(right_overhangs)} reads with a 3' overhang")
+
+        left_ext = ""
+        right_ext = ""
+
+        # Filter overhangs by --max-overhang before trusting them.
+        # Long soft-clips (hundreds of nt) are almost always reads that only
+        # partially aligned to this segment (cross-segment homology, chimeric
+        # reads, etc.) rather than genuine terminal sequence recovery.
+        def filter_and_report(overhangs, end_label):
+            all_lens = sorted(len(s) for s in overhangs)
+            kept = [s for s in overhangs if len(s) <= args.max_overhang]
+            dropped = len(overhangs) - len(kept)
+            if dropped:
+                print(f"  {end_label}: {dropped} read(s) dropped (clip > {args.max_overhang} nt); "
+                      f"lengths before filter: {all_lens[:20]}{'...' if len(all_lens)>20 else ''}")
+            return kept
+
+        left_filtered  = filter_and_report(left_overhangs,  "5' filter")
+        right_filtered = filter_and_report(right_overhangs, "3' filter")
+
+        if len(left_filtered) >= args.min_support:
+            lengths = sorted(len(s) for s in left_filtered)
+            print(f"  5' overhang lengths after filter (sorted): {lengths}")
+            left_ext = spoa_consensus(left_filtered, f"/tmp/{contig}_left") or ""
+            if left_ext:
+                print(f"  -> recovered {len(left_ext)} nt on the 5' end: {left_ext}")
+        elif left_overhangs:
+            print(f"  5': {len(left_filtered)} read(s) remain after length filter "
+                  f"(< --min-support {args.min_support}) -- not extending")
+
+        if len(right_filtered) >= args.min_support:
+            lengths = sorted(len(s) for s in right_filtered)
+            print(f"  3' overhang lengths after filter (sorted): {lengths}")
+            right_ext = spoa_consensus(right_filtered, f"/tmp/{contig}_right") or ""
+            if right_ext:
+                print(f"  -> recovered {len(right_ext)} nt on the 3' end: {right_ext}")
+        elif right_overhangs:
+            print(f"  3': {len(right_filtered)} read(s) remain after length filter "
+                  f"(< --min-support {args.min_support}) -- not extending")
+
+        out_records.append((contig, left_ext + seq + right_ext))
+
+    with open(args.out, "w") as f:
+        for header, seq in out_records:
+            f.write(f">{header}\n")
+            for i in range(0, len(seq), 70):
+                f.write(seq[i:i+70] + "\n")
+
+    print(f"\nWrote extended consensus to {args.out}")
+
+
+if __name__ == "__main__":
+    main()```
+
+Command to run the script:
+
+```{bash}
+#First prepare the environment. Using conda instead of pip
+conda install -c bioconda -c conda-forge pysam biopython spoa
+
+python3 extend_consensus_ends.py \
+    --bam PAN99_well17_consensus.sorted.bam \
+    --consensus PAN99_well17_consensus.fasta \
+    --out PAN99_well17_consensus_extended_v3.fasta \
+    --min-support 5 \
+    --max-overhang 80
+```
+
+Ok finally, segments have been extended to a reasonable length. Here's the summary from Claudio
+
+End	Range across 8 segments
+5′ left	15–54 nt
+3′ right	19–34 nt
+
+Now going to use these new references in the usearch
+```{bash}
+#First, I want to do the new consensus with no extension
+usearch -usearch_global final_plate02_well17_uni.fastq -db PAN99_well17_consensus.fasta -id 0.90 -blast6out plate02_well17_new_consensus_db_global_90.b6 -strand both -top_hit_only
+#Ugh, seems to be very similar
+#Yep :(
+#04:46 51Mb    100.0% Searching, 81.6% matched
+
+#Taking a peek
+cut -f 2,3,4 plate02_well17_new_consensus_db_global_90.b6 | less
+
+#Let's look at the summary
+cut -f 2 plate02_well17_new_consensus_db_global_90.b6 | cut -d , -f 1 | sort | uniq -c | \
+awk '{
+  n = $1; strain_seg = $2
+  split(strain_seg, a, "_"); locus = a[2]
+  total[locus] += n
+  if (n > max[locus]) { max[locus] = n; best[locus] = strain_seg }
+}
+END {
+  OFS = "\t"
+  for (loc in best) printf "%s\t%d\t%d\t%.4f\n", best[loc], max[loc], total[loc], max[loc]/total[loc]
+}' | sort -k2,2 -nr
+#PAN99_NS	49945	49945	1.0000
+#PAN99_M	45945	45945	1.0000
+#PAN99_NP	15851	15851	1.0000
+#PAN99_NA	15035	15035	1.0000
+#PAN99_HA	5646	5646	1.0000
+#PAN99_PA	1104	1104	1.0000
+#PAN99_PB1	1008	1008	1.0000
+#PAN99_PB2	832	832	1.0000
+
+#Pretty much same as before
+
+
+#Let's try local with the new consensus with no extension. So same as above, just local
+usearch -usearch_local final_plate02_well17_uni.fastq -db PAN99_well17_consensus.fasta -id 0.90 -blast6out plate02_well17_new_consensus_db_local_90.b6 -strand both -top_hit_only
+#Even from the get-go seems like this works better 100% matching. Not faster, though.
+
+#Let's take a look
+cut -f 2,3,4 plate02_well17_new_consensus_db_local_90.b6 | less
+
+#Let's sort by match length
+#Plenty of long matches, even though local alignment 
+cut -f 2,3,4 plate02_well17_new_consensus_db_local_90.b6 | sort -k 3,3 -nr | less
+
+#Summary
+cut -f 2 plate02_well17_new_consensus_db_local_90.b6 | cut -d , -f 1 | sort | uniq -c | \
+awk '{
+  n = $1; strain_seg = $2
+  split(strain_seg, a, "_"); locus = a[2]
+  total[locus] += n
+  if (n > max[locus]) { max[locus] = n; best[locus] = strain_seg }
+}
+END {
+  OFS = "\t"
+  for (loc in best) printf "%s\t%d\t%d\t%.4f\n", best[loc], max[loc], total[loc], max[loc]/total[loc]
+}' | sort -k2,2 -nr
+#PAN99_NS	51336	51336	1.0000
+#PAN99_M	47849	47849	1.0000
+#PAN99_PB1	22674	22674	1.0000
+#PAN99_NP	17239	17239	1.0000
+#PAN99_NA	15925	15925	1.0000
+#PAN99_HA	6177	6177	1.0000
+#PAN99_PB2	2694	2694	1.0000
+#PAN99_PA	2011	2011	1.0000
+
+#Now going to check the extended reference
+#First, I want to do the new consensus extended
+
+#First Global
+usearch -usearch_global final_plate02_well17_uni.fastq -db PAN99_well17_consensus_extended_v3.fasta -id 0.90 -blast6out plate02_well17_new_consensus_extended_db_global_90.b6 -strand both -top_hit_only
+
+#05:28 52Mb    100.0% Searching, 81.4% matched
+#Looks pretty similar
+
+#Summary
+cut -f 2 plate02_well17_new_consensus_extended_db_global_90.b6 | cut -d , -f 1 | sort | uniq -c | \
+awk '{
+  n = $1; strain_seg = $2
+  split(strain_seg, a, "_"); locus = a[2]
+  total[locus] += n
+  if (n > max[locus]) { max[locus] = n; best[locus] = strain_seg }
+}
+END {
+  OFS = "\t"
+  for (loc in best) printf "%s\t%d\t%d\t%.4f\n", best[loc], max[loc], total[loc], max[loc]/total[loc]
+}' | sort -k2,2 -nr
+#PAN99_NS	49740	49740	1.0000
+#PAN99_M	45883	45883	1.0000
+#PAN99_NP	15809	15809	1.0000
+#PAN99_NA	15023	15023	1.0000
+#PAN99_HA	5641	5641	1.0000
+#PAN99_PA	1102	1102	1.0000
+#PAN99_PB1	1005	1005	1.0000
+#PAN99_PB2	829	829	1.0000
+
+#Roughly similar to other global
+
+#Second local
+usearch -usearch_local final_plate02_well17_uni.fastq -db PAN99_well17_consensus_extended_v3.fasta -id 0.90 -blast6out plate02_well17_new_consensus_extended_db_local_90.b6 -strand both -top_hit_only
+
+cut -f 2 plate02_well17_new_consensus_extended_db_local_90.b6 | cut -d , -f 1 | sort | uniq -c | \
+awk '{
+  n = $1; strain_seg = $2
+  split(strain_seg, a, "_"); locus = a[2]
+  total[locus] += n
+  if (n > max[locus]) { max[locus] = n; best[locus] = strain_seg }
+}
+END {
+  OFS = "\t"
+  for (loc in best) printf "%s\t%d\t%d\t%.4f\n", best[loc], max[loc], total[loc], max[loc]/total[loc]
+}' | sort -k2,2 -nr
+#PAN99_NS	51295	51295	1.0000
+#PAN99_M	47857	47857	1.0000
+#PAN99_PB1	22716	22716	1.0000
+#PAN99_NP	17237	17237	1.0000
+#PAN99_NA	15928	15928	1.0000
+#PAN99_HA	6169	6169	1.0000
+#PAN99_PB2	2680	2680	1.0000
+#PAN99_PA	2023	2023	1.0000
 
 ```
 
+Okay, PAN99 seems to be just fine thank you very much. 
+Only thing left to investigate which reads makes the gap between the 82ish% and 100%. 
 
+Alignment
+Alignment length looks great, seems like local will try to do the longest match possible. Flagging some very short 12nt matches - we probably need a cutoff. Curious if local alignment is picking up DelVGs - this probably would be a solid match on one side and a second half (roughly) of the read will be unmatched - don't know if usearch will do matches on each end.
+
+ALSO: Check the extended reference to see if it gets better
+
+Next steps:
+1. Get a CA09 consensus
+2. Test as above
+3. Then make a new reference with both new references and run global and local
+
+```{bash}
+
+```
 
