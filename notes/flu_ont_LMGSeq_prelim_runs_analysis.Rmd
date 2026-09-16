@@ -806,12 +806,213 @@ Alignment length looks great, seems like local will try to do the longest match 
 
 ALSO: Check the extended reference to see if it gets better
 
+
+Going from global → local (same non-extended reference), recovery per segment:
+
+
+*Afternoon Update*
+
+I asked Claudio to summarize the results above and it concluded that it was the alignment mode, not the reference, which was evident, but the more importantly showed that "under local alignment" [all segments improve somewhat], but "PB1, PB2, and PA — the three polymerase-complex segments — improve dramatically more than the rest.". See the table below. Obviously this suggests DelVGs might actually be at play.
+
+Segment	  Global	Local	  Fold change
+PB1	      1,008	  22,674	22.5×
+PB2	      832	    2,694	  3.2×
+PA	      1,104	  2,011	  1.8×
+HA	      5,646	  6,177	  1.09×
+NP	      15,851	17,239	1.09×
+NA	      15,035	15,925	1.06×
+M	        45,945	47,849	1.04×
+NS	      49,945	51,336	1.03×
+
+Let's check the b6 output for one of the local. My hunch is that there should be a big group of alignments that are roughly half of typical DelVG lengths
+
+```{bash}
+
+cut -f 2,3,4 plate02_well17_new_consensus_extended_db_local_90.b6 | sort -k 3,3 -nr | grep "PB1" | less
+#interesting....
+
+```
+
 Next steps:
 1. Get a CA09 consensus
 2. Test as above
 3. Then make a new reference with both new references and run global and local
 
+I asked Claudio to get me a CA well to look at and it came up with this:
+"Best candidate: plate02_well93. It's the closest thing to a CA09-dominant well (4 of its 5 typed segments — NP, NS, PB1, M — call CA09, with only NA showing PAN99), and it's exactly the "lots of reads not assigned" case you're after"
+
+Let's try that well first just to check. But I think I need a known CA09 sample, maybe from Ile's work.
+
 ```{bash}
 
+cd /group/sldmunozgrp/cysto_LMGSeq08-25/sam_basecalled_flu_2025/sam_analyses
+
+#Ok, now let's move to plate02_well93
+cp /group/sldmunozgrp/cysto_LMGSeq08-25/sam_basecalled_flu_2025/CA09xPAN99_102325/cutadapt_outputs/plate02/well93/plate02_well93_CA09xPAN99_calls_2025-12-17_T21-10-01_cutadapt_porechop.fastq .
+
+#Going to look at read length distributions, with a couple of scripts provided by Claude
+
+#Length summary stats
+awk 'NR%4==2 {print length($0)}' plate02_well93_CA09xPAN99_calls_2025-12-17_T21-10-01_cutadapt_porechop.fastq | sort -n | awk '{a[NR]=$1; sum+=$1} END {print "n="NR, "min="a[1], "max="a[NR], "mean="sum/NR, "median="a[int(NR/2)]}'
+#n=28401 min=1 max=3306 mean=886.167 median=891
+#Looks good!
+
+#Read length distribution
+awk 'NR%4==2 {print length($0)}' plate02_well93_CA09xPAN99_calls_2025-12-17_T21-10-01_cutadapt_porechop.fastq | sort -n | uniq -c | awk '{print $2"\t"$1}' > plate_02_well93_demux_fastq_read_length_distribution.txt
+#Looks good
+
+#First get rid of ONT landing pad
+cutadapt -a TTTCTGTTGGTGCTGATATTG...GAAGATAGAGCGACAGGCAAGT -a ACTTGCCTGTCGCTCTATCTTC...CAATATCAGCACCAACAGAAA -o plate02_well93_ont_landing_pad.fastq plate02_well93_CA09xPAN99_calls_2025-12-17_T21-10-01_cutadapt_porechop.fastq --untrimmed-output=plate02_well93_ont_landing_pad_untrimmed.fastq --action=lowercase > plate02_well93_ont_landing_pad.txt
+#Total reads processed:                  28,401
+#Reads with adapters:                        15 (0.1%)
+#In line with other 2 wells
+
+#Now let's check for the uni primers
+cutadapt -a AGCAAAAGCAGG...CCTTGTTTCTACT -a AGTAGAAACAAGG...CCTGCTTTTGC -o plate02_well93_uni.fastq plate02_well93_CA09xPAN99_calls_2025-12-17_T21-10-01_cutadapt_porechop.fastq --untrimmed-output=plate02_well93_uni_untrimmed.fastq --action=lowercase > plate02_well93_uni.txt
+#=== Summary ===
+#Total reads processed:                  28,401
+#Reads with adapters:                    28,096 (98.9%)
+#Very good
+
+less plate02_well93_uni.fastq
+#Looks good...
+
+#Now let's actually trim
+cutadapt -a AGCAAAAGCAGG...CCTTGTTTCTACT -a AGTAGAAACAAGG...CCTGCTTTTGC -o final_plate02_well93_uni.fastq plate02_well93_CA09xPAN99_calls_2025-12-17_T21-10-01_cutadapt_porechop.fastq --discard-untrimmed > final_plate02_well93_uni.txt
+
+less final_plate02_well93_uni.txt
+#Same as before, as expected
+
+#Now usearch
+usearch -usearch_global final_plate02_well93_uni.fastq -db CA09_PAN99.fasta -id 0.90 -blast6out plate02_well93_corrected_db_90.b6 -strand both -top_hit_only
+#01:04 48Mb    100.0% Searching, 88.5% matched
+
+#Let's summarize
+cut -f 2 plate02_well93_corrected_db_90.b6 | cut -d , -f 1 | sort | uniq -c | \
+awk '{
+  n = $1; strain_seg = $2
+  split(strain_seg, a, "_"); locus = a[2]
+  total[locus] += n
+  if (n > max[locus]) { max[locus] = n; best[locus] = strain_seg }
+}
+END {
+  OFS = "\t"
+  for (loc in best) printf "%s\t%d\t%d\t%.4f\n", best[loc], max[loc], total[loc], max[loc]/total[loc]
+}' | sort -k2,2 -nr
+#CA09_NS	13268	13337	0.9948
+#CA09_M	10997	11123	0.9887
+#CA09_NP	371	372	0.9973
+#CA09_PB1	24	31	0.7742
+#PAN99_NA	2	2	1.0000
+
+#Now just to check, let's use usearch local 
+usearch -usearch_local final_plate02_well93_uni.fastq -db CA09_PAN99.fasta -id 0.90 -blast6out plate02_well93_corrected_db_local_90.b6 -strand both -top_hit_only
+#00:34 58Mb    100.0% Searching, 99.9% matched
+#As expected just for the local alignment
+
+#Summary
+cut -f 2 plate02_well93_corrected_db_local_90.b6 | cut -d , -f 1 | sort | uniq -c | \
+awk '{
+  n = $1; strain_seg = $2
+  split(strain_seg, a, "_"); locus = a[2]
+  total[locus] += n
+  if (n > max[locus]) { max[locus] = n; best[locus] = strain_seg }
+}
+END {
+  OFS = "\t"
+  for (loc in best) printf "%s\t%d\t%d\t%.4f\n", best[loc], max[loc], total[loc], max[loc]/total[loc]
+}' | sort -k2,2 -nr
+#CA09_NS	13561	13689	0.9906
+#CA09_M	11445	11656	0.9819
+#PAN99_PB1	1612	1693	0.9522
+#CA09_NP	464	470	0.9872
+#CA09_HA	297	313	0.9489
+#CA09_PA	92	109	0.8440
+#CA09_PB2	78	99	0.7879
+#CA09_NA	26	33	0.7879
 ```
 
+Asked Claudio to make a script to align reads with minimap2
+
+```{bash}
+#!/bin/bash
+# Map presumed-pure PAN99 reads to the PAN99 reference and build a new
+# consensus, one sequence per segment.
+
+READS="final_plate02_well93_uni.fastq"
+REF="CA09.fasta"
+OUT_PREFIX="CA09_well93_consensus"
+MIN_DEPTH=5
+
+minimap2 -ax map-ont "$REF" "$READS" > "${OUT_PREFIX}.sam"
+samtools sort -o "${OUT_PREFIX}.sorted.bam" "${OUT_PREFIX}.sam"
+samtools index "${OUT_PREFIX}.sorted.bam"
+
+samtools flagstat "${OUT_PREFIX}.sorted.bam"
+samtools idxstats "${OUT_PREFIX}.sorted.bam"
+
+samtools consensus --min-depth "$MIN_DEPTH" -o "${OUT_PREFIX}.fasta" "${OUT_PREFIX}.sorted.bam"
+
+# Count Ns per segment in the new consensus
+awk '/^>/{if(seq) print name, gsub(/N/,"N",seq); name=$0; seq=""; next} {seq=seq $0} END{if(seq) print name, gsub(/N/,"N",seq)}' "${OUT_PREFIX}.fasta"
+```
+
+Ok, will now modify the consensus script
+
+```{bash}
+ vi consensus.sh
+ #Copy pasted above after clearing
+ 
+chmod +x consensus.sh
+./consensus.sh
+
+#[M::mm_idx_gen::0.014*0.31] collected minimizers
+#[M::mm_idx_gen::0.015*0.36] sorted minimizers
+#[M::main::0.015*0.36] loaded/built the index for 8 target sequence(s)
+#[M::mm_mapopt_update::0.015*0.36] mid_occ = 10
+#[M::mm_idx_stat] kmer size: 15; skip: 10; is_hpc: 0; #seq: 8
+#[M::mm_idx_stat::0.016*0.37] distinct minimizers: 2403 (100.00% are singletons); average occurrences: 1.000; average spacing: 5.499; total length: 13215
+#[M::worker_pipeline::6.389*1.00] mapped 28096 sequences
+#[M::main] Version: 2.31-r1302
+#[M::main] CMD: minimap2 -ax map-ont CA09.fasta final_plate02_well93_uni.fastq
+#[M::main] Real time: 6.394 sec; CPU: 6.381 sec; Peak RSS: 0.064 GB
+#29714 + 0 in total (QC-passed reads + QC-failed reads)
+#28096 + 0 primary
+#0 + 0 secondary
+#1618 + 0 supplementary
+#0 + 0 duplicates
+#0 + 0 primary duplicates
+#29561 + 0 mapped (99.49% : N/A)
+#27943 + 0 primary mapped (99.46% : N/A)
+#0 + 0 paired in sequencing
+#0 + 0 read1
+#0 + 0 read2
+#0 + 0 properly paired (N/A : N/A)
+#0 + 0 with itself and mate mapped
+#0 + 0 singletons (N/A : N/A)
+#0 + 0 with mate mapped to a different chr
+#0 + 0 with mate mapped to a different chr (mapQ>=5)
+#CA09_PB2	2280	0	0
+#CA09_HA	1701	232	0
+#CA09_M	982	11828	0
+#CA09_NP	1497	508	0
+#CA09_NA	1410	0	0
+#CA09_PA	2208	10	0
+#CA09_PB1	2274	3076	0
+#CA09_NS	863	13907	0
+#*	0	0	153
+#>CA09_HA 1089
+#>CA09_M 0
+#>CA09_NP 1002
+#>CA09_PA 1788
+#>CA09_PB1 1107
+#>CA09_NS 1
+
+#Now let's extend the consensus
+python3 extend_consensus_ends.py \
+    --bam CA09_well93_consensus.sorted.bam \
+    --consensus CA09_well93_consensus.fasta \
+    --out CA09_well93_consensus_extended_v3.fasta \
+    --min-support 5 \
+    --max-overhang 80
+```
