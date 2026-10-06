@@ -1308,7 +1308,7 @@ less coinfection_CA09_PAN99_plate02_strain_assignment_output_all_samples.txt
 Downloaded the file for analyses
 
 ```{bash}
-
+scp -rp sldmunoz@franklin.hpc.ucdavis.edu:/group/sldmunozgrp/cysto_LMGSeq08-25/sam_basecalled_flu_2025/CA09xPAN99_102325/genotyping_outputs_local/strain_assignment_output/coinfection_CA09_PAN99_plate02_strain_assignment_output_all_samples.txt /Users/sociovirology/Downloads/
 ```
 
 Running coinfections_reasortment.R interactively and first impressions are:
@@ -1325,5 +1325,23 @@ Quick caution and notes from Courtney Sept 21, 2026
 -Check the wells that didn't work for patterns in the plate layout, many are sequential numbers
 -Check patterns of skew with some segments in the local .b6 file. Some segments with way more reads. Well 56 and well 30 are good examples (40k for PB1 and 3k for PA; NP had 19 only)
 -Majorities are much less tight now.
--Make sure denominator is correct. The 4th column is
+-Make sure denominator is correct. The 4th column is actually as follows: 
 "V6 is NOT total reads per well, its total unmatched/unsorted reads for the well (by usearch)"
+
+*October 6, 2026*
+-I don't want to get hung up on the DelVGs too much. That will be fun later, but need to focus.
+-The goal is the RT test run. As an intermediate, I should check if the reassortment looks "good" compared to Taylor et al. 
+
+Seems like to move towards the RT test goal, I need to:
+1. Determine if usearch_local makes global matches (if it would have been run in global mode)
+2. Determine if I can use bioinformatics to make the results comparable to Taylor et al. 2023, in short order, or just go by the global results only at this point.
+3. Decide on which analysis to use and move to analyze the next two runs.
+4. Then move on to the actual concentration test
+
+Claudio just realized that I never circled back to run the global pipeline with the updated reference file. Let's do that.
+
+Command should be the same one that Courtney gave me, but with the original script
+```{bash}
+bash genotyping.sh -d /group/sldmunozgrp/cysto_LMGSeq08-25/sam_basecalled_flu_2025/CA09xPAN99_102325 -s /group/sldmunozgrp/cysto_LMGSeq08-25/sam_basecalled_flu_2025/sample_list_CA09xPAN99_Susie.csv -f /group/sldmunozgrp/cysto_LMGSeq08-25/sam_basecalled_flu_2025/all_flu_refs_updated_by_sam.fasta -b 0
+```
+
