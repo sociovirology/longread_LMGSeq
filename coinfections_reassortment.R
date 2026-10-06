@@ -6,7 +6,7 @@ library(readr)
 library(stringr)
 library(ggplot2)
 library(ggthemes)
-library(gtools)
+
 
 # ============================================================================
 # 1. Importing Data and Initial Preparation of Data Frame ----
