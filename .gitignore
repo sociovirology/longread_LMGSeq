@@ -2,3 +2,13 @@
 .Rhistory
 .RData
 .Ruserdata
+#Mac Hidden File
+.DS_Store
+
+# Large sequence/alignment outputs
+*.b6
+*.fastq
+*.fastq.gz
+*.bam
+*.bam.bai
+*.sam

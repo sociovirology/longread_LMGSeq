@@ -1342,6 +1342,10 @@ Claudio just realized that I never circled back to run the global pipeline with 
 
 Command should be the same one that Courtney gave me, but with the original script
 ```{bash}
-bash genotyping.sh -d /group/sldmunozgrp/cysto_LMGSeq08-25/sam_basecalled_flu_2025/CA09xPAN99_102325 -s /group/sldmunozgrp/cysto_LMGSeq08-25/sam_basecalled_flu_2025/sample_list_CA09xPAN99_Susie.csv -f /group/sldmunozgrp/cysto_LMGSeq08-25/sam_basecalled_flu_2025/all_flu_refs_updated_by_sam.fasta -b 0
+#Get in right directory
+cd /group/sldmunozgrp/cysto_LMGSeq08-25/sam_basecalled_flu_2025/CA09xPAN99_102325
+
+#Run command as Courtney did for local, but now global with the right reference 
+sbatch run_genotp_sbatch.sh -d /group/sldmunozgrp/cysto_LMGSeq08-25/sam_basecalled_flu_2025/CA09xPAN99_102325 -s /group/sldmunozgrp/cysto_LMGSeq08-25/sam_basecalled_flu_2025/sample_list_CA09xPAN99_Susie.csv -f /group/sldmunozgrp/cysto_LMGSeq08-25/sam_basecalled_flu_2025/all_flu_refs_updated_by_sam.fasta -b 0
 ```
 
