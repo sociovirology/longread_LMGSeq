@@ -1349,3 +1349,19 @@ cd /group/sldmunozgrp/cysto_LMGSeq08-25/sam_basecalled_flu_2025/CA09xPAN99_10232
 sbatch run_genotp_sbatch.sh -d /group/sldmunozgrp/cysto_LMGSeq08-25/sam_basecalled_flu_2025/CA09xPAN99_102325 -s /group/sldmunozgrp/cysto_LMGSeq08-25/sam_basecalled_flu_2025/sample_list_CA09xPAN99_Susie.csv -f /group/sldmunozgrp/cysto_LMGSeq08-25/sam_basecalled_flu_2025/all_flu_refs_updated_by_sam.fasta -b 0
 ```
 
+Now going to take Caludio's suggestion and look at the read lengths in the b6 files. Using script `b6_length_profile.py` entirely written by Claudio
+
+```{python}
+/group/sldmunozgrp/cysto_LMGSeq08-25/sam_basecalled_flu_2025/CA09xPAN99_102325
+
+vi b6_length_profile.py
+
+python3 b6_length_profile.py profile --b6dir /group/sldmunozgrp/cysto_LMGSeq08-25/sam_basecalled_flu_2025/CA09xPAN99_102325/genotyping_outputs_local/coinfection/plate02/
+
+python3 b6_length_profile.py sweep --b6dir /group/sldmunozgrp/cysto_LMGSeq08-25/sam_basecalled_flu_2025/CA09xPAN99_102325/genotyping_outputs_local/coinfection/plate02/ --thresholds 0 25 50 100 200 300 400 600 800
+
+```
+
+Need to start at YML file for global re-run
+
+
