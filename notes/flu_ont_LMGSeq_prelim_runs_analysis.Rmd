@@ -1510,7 +1510,10 @@ Overall: median=886 p05=158 p95=1559
   alignments <  100 nt:   106,418 (3.8%)
   alignments <  200 nt:   302,281 (10.7%)
 
-
+OCT 7 2026 START HERE
+-Need to run second step.
+-Then run for Global
+-Then the one Claudio gave me
 
 
 Now running the GLOBAL with the new, NEW, reference corrected to be online, instead of multiline
