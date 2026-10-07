@@ -1362,6 +1362,107 @@ python3 b6_length_profile.py sweep --b6dir /group/sldmunozgrp/cysto_LMGSeq08-25/
 
 ```
 
-Need to start at YML file for global re-run
+*October 7, 2026*
+Need to start at YML file for global re-run, because got an error.
+
+I think something weird is happening to the results and it may have to do with the fasta
+
+This apparently worked
+```{bash}
+sbatch run_genotp_sbatch.sh -d /group/sldmunozgrp/cysto_LMGSeq08-25/sam_basecalled_flu_2025/CA09xPAN99_102325 -s /group/sldmunozgrp/cysto_LMGSeq08-25/sam_basecalled_flu_2025/sample_list_CA09xPAN99_Susie.csv -f /group/sldmunozgrp/cysto_LMGSeq08-25/sam_basecalled_flu_2025/all_flu_refs_updated_by_sam.fasta -b 0
+```
+But something is not right. Shouldn't take 3 minutes to run.
+
+
+Let me try again to reproduce the original results. Only changing the reference here
+
+```{bash}
+sbatch run_genotp_sbatch.sh -d /group/sldmunozgrp/cysto_LMGSeq08-25/sam_basecalled_flu_2025/CA09xPAN99_102325 -s /group/sldmunozgrp/cysto_LMGSeq08-25/sam_basecalled_flu_2025/sample_list_CA09xPAN99_Susie.csv -f /group/sldmunozgrp/cysto_LMGSeq08-25/sam_basecalled_flu_2025/all_flu_refs.fasta -b 0
+```
+
+Ok, this one is taking waaaaay longer, which is good. I think it has to do with the FASTA being multiline, because that's the difference I spot between the new reference I generated (aside from the bases) and the original one.
+
+Ok, took a look and the results look largely the same as the original run.
+
+Downloaded the file and gave it a descriptive name in outputs. While I'm at it, will rename the output folder for the previous one with a descriptive name
+
+```{bash}
+cd /group/sldmunozgrp/cysto_LMGSeq08-25/sam_basecalled_flu_2025/CA09xPAN99_102325
+
+
+mv genotyping_outputs_from_10-07-2026_12.59 genotyping_outputs_from_10-07-2026_12.59_global_new_oneline_fasta
+
+
+genotyping_outputs_from_10-07-2026_12.59_global_new_oneline_fasta/
+
+/group/sldmunozgrp/cysto_LMGSeq08-25/sam_basecalled_flu_2025/CA09xPAN99_102325/genotyping_outputs/strain_assignment_output
+
+
+scp -rp sldmunoz@franklin.hpc.ucdavis.edu:/group/sldmunozgrp/cysto_LMGSeq08-25/sam_basecalled_flu_2025/CA09xPAN99_102325/genotyping_outputs_from_10-07-2026_12.59_global_new_oneline_fasta/strain_assignment_output/'coinfection_CA09_PAN99_CA09_PAN99'$'\r''_plate02_strain_assignment_output_all_samples.txt' /Users/sociovirology/Downloads/
+
+#Renamed as coinfection_CA09_PAN99_CA09_PAN99?_plate02_strain_assignment_output_all_samples_global_original_db.txt in outputs
+
+```
+
+Changing the reference to oneline
+```{bash}
+
+#Go to directory
+cd /group/sldmunozgrp/cysto_LMGSeq08-25/sam_basecalled_flu_2025/sam_analyses
+
+#Rename for comparison
+mv all_flu_refs_updated_by_sam.fasta all_flu_refs_updated_by_sam.fasta.multiline
+
+awk 'BEGIN {RS=">";FS="\n"} NR>1 {seq=""; for (i=2;i<=NF;i++) seq=seq$i; print ">"$1"\n"seq}' all_flu_refs_updated_by_sam.fasta.multiline | grep -A 1 "PAN99" > all_flu_refs_updated_by_sam.fasta
+
+#Now copy to other locations where I put it
+cp all_flu_refs_updated_by_sam.fasta /group/sldmunozgrp/cysto_LMGSeq08-25/sam_basecalled_flu_2025/sam_analyses/all_flu_refs_updated_by_sam.fasta
+
+```
+
+Ok, now running again with the fixed one-liner FASTA. Note that the name of the FASTA is the same (probably bad practice)
+
+```{bash}
+cd /group/sldmunozgrp/cysto_LMGSeq08-25/sam_basecalled_flu_2025/CA09xPAN99_102325
+
+sbatch run_genotp_sbatch.sh -d /group/sldmunozgrp/cysto_LMGSeq08-25/sam_basecalled_flu_2025/CA09xPAN99_102325 -s /group/sldmunozgrp/cysto_LMGSeq08-25/sam_basecalled_flu_2025/sample_list_CA09xPAN99_Susie.csv -f /group/sldmunozgrp/cysto_LMGSeq08-25/sam_basecalled_flu_2025/all_flu_refs_updated_by_sam.fasta -b 0
+```
+Now it seems to be taking an appropriate time to run
+
+Downloaded results and renaming `coinfection_CA09_PAN99_CA09_PAN99?_plate02_strain_assignment_output_all_samples__global_new_db_oneline_fasta.txt`
+
+
+Let's move on and run the local, with the original reference first
+```{r}
+sbatch run_genotyping_local_usearch_sbatch.sh -d /group/sldmunozgrp/cysto_LMGSeq08-25/sam_basecalled_flu_2025/CA09xPAN99_102325 -s /group/sldmunozgrp/cysto_LMGSeq08-25/sam_basecalled_flu_2025/sample_list_CA09xPAN99_Susie.csv -f /group/sldmunozgrp/cysto_LMGSeq08-25/sam_basecalled_flu_2025/all_flu_refs.fasta -b 0
+```
+
+
+Downloaded the results file
+```{bash}
+scp -rp sldmunoz@franklin.hpc.ucdavis.edu:/group/sldmunozgrp/cysto_LMGSeq08-25/sam_basecalled_flu_2025/CA09xPAN99_102325/genotyping_outputs_local/strain_assignment_output/'coinfection_CA09_PAN99_CA09_PAN99'$'\r''_plate02_strain_assignment_output.txt' /Users/sociovirology/Downloads/
+```
+
+Renaming folder to keep track
+```{bash}
+mv genotyping_outputs_local_from_10-07-2026_14.09 genotyping_outputs_local_from_10-07-2026_14.09_local_original_db
+```
+
+
+
+Now running the local with the new reference corrected to be online, instead of multiline
+
+```{bash}
+sbatch run_genotyping_local_usearch_sbatch.sh -d /group/sldmunozgrp/cysto_LMGSeq08-25/sam_basecalled_flu_2025/CA09xPAN99_102325 -s /group/sldmunozgrp/cysto_LMGSeq08-25/sam_basecalled_flu_2025/sample_list_CA09xPAN99_Susie.csv -f /group/sldmunozgrp/cysto_LMGSeq08-25/sam_basecalled_flu_2025/all_flu_refs_updated_by_sam.fasta -b 0
+```
+
+
+
+
+
+
+Going to fix the updated one. Maybe this will completely change the local result too! Need to circle back
+
+
 
 
